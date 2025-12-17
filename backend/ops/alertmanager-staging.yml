@@ -1,0 +1,25 @@
+# Alertmanager configuration for staging/production with real paging routes.
+# Replace placeholders via envsubst or your templating system before deploying.
+route:
+  receiver: primary
+  routes:
+    # Keep CI webhook handy for smoke checks alongside paging routes.
+    - match_re:
+        alertname: ".*"
+      receiver: webhook-mirror
+receivers:
+  - name: primary
+    slack_configs:
+      - api_url: ${SLACK_WEBHOOK_URL}
+        channel: ${SLACK_CHANNEL}
+        send_resolved: true
+        title: "[SynQc] {{ .CommonLabels.alertname }}"
+        text: "{{ range .Alerts }}*{{ .Annotations.summary }}*\n{{ .Annotations.description }}\n{{ end }}"
+    pagerduty_configs:
+      - routing_key: ${PAGERDUTY_ROUTING_KEY}
+        description: "SynQc backend alert: {{ .CommonAnnotations.summary }}"
+        severity: critical
+  - name: webhook-mirror
+    webhook_configs:
+      - url: ${WEBHOOK_MIRROR_URL}
+        send_resolved: true

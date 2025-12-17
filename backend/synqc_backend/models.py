@@ -88,6 +88,32 @@ class RunExperimentResponse(BaseModel):
     notes: Optional[str] = None
 
 
+class RunJobStatus(str, Enum):
+    """Lifecycle status for a submitted run."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class RunSubmissionResponse(BaseModel):
+    """Acknowledgement returned immediately after enqueuing a run."""
+
+    id: str
+    status: RunJobStatus
+    created_at: float
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+    error: Optional[str] = None
+
+
+class RunStatusResponse(RunSubmissionResponse):
+    """Extended status that optionally returns the completed run payload."""
+
+    result: Optional[RunExperimentResponse] = None
+
+
 class ExperimentSummary(BaseModel):
     """Lightweight summary for listing experiment runs."""
 

@@ -1,0 +1,11 @@
+# Minimal Alertmanager config for CI/staging verification.
+# Routes alerts to a local webhook receiver so GitHub Actions can assert that
+# alert delivery is functioning (and that no alerts fired during healthy runs).
+
+route:
+  receiver: ci-webhook
+
+receivers:
+  - name: ci-webhook
+    webhook_configs:
+      - url: http://host.docker.internal:9094/alerts
