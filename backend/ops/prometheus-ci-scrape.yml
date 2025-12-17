@@ -1,0 +1,53 @@
+# Prometheus scrape configuration for CI/staging runs.
+#
+# This scrapes the SynQc backend metrics exporter (default port 9000) from inside
+# a container while the backend runs on the host. The alerting block points to an
+# Alertmanager exposed on the host as well. In GitHub Actions we run Prometheus
+# with `--add-host host.docker.internal:host-gateway` so the target resolves.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: synqc-backend-ci
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:9000
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - host.docker.internal:9093
+
+rule_files:
+  - synqc-alerts.yml
+
+groups:
+  - name: synqc-alerts
+    rules:
+      - alert: RedisDisconnected
+        expr: synqc_redis_connected{backend="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SynQc Redis unavailable"
+
+      - alert: QueueBacklogGrowing
+        expr: max_over_time(synqc_queue_jobs_queued[5m]) > 0 and deriv(synqc_queue_jobs_queued[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SynQc queue is growing"
+
+      - alert: BudgetKeyChurnSpike
+        expr: rate(synqc_budget_session_key_churn_total[15m]) > 5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusual churn in session budget keys"

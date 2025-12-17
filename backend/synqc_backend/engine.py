@@ -4,6 +4,7 @@ import time
 import uuid
 from typing import Tuple
 
+from .budget import BudgetTracker
 from .config import settings
 from .hardware_backends import get_backend
 from .models import (
@@ -16,6 +17,14 @@ from .models import (
 from .storage import ExperimentStore
 
 
+class BudgetExceeded(Exception):
+    """Raised when a request exceeds the configured session budget."""
+
+    def __init__(self, remaining: int):
+        self.remaining = remaining
+        super().__init__(f"Session shot budget exhausted; remaining={remaining}")
+
+
 class SynQcEngine:
     """Core engine for SynQc Temporal Dynamics Series backend.
 
@@ -25,17 +34,19 @@ class SynQcEngine:
       - Aggregate KPIs and store experiment records.
     """
 
-    def __init__(self, store: ExperimentStore) -> None:
+    def __init__(self, store: ExperimentStore, budget_tracker: BudgetTracker) -> None:
         self._store = store
-        self._session_shots_used = 0
+        self._budget_tracker = budget_tracker
 
-    def _apply_shot_guardrails(self, req: RunExperimentRequest) -> Tuple[int, bool]:
+    def _apply_shot_guardrails(self, req: RunExperimentRequest, session_id: str) -> Tuple[int, bool]:
         """Determine effective shot budget and whether to flag a warning.
 
         Returns:
             (effective_shot_budget, warn_for_target)
         """
         shot_budget = req.shot_budget or settings.default_shot_budget
+        if shot_budget <= 0:
+            raise ValueError("shot_budget must be positive")
         if shot_budget > settings.max_shots_per_experiment:
             shot_budget = settings.max_shots_per_experiment
 
@@ -43,25 +54,25 @@ class SynQcEngine:
         if req.hardware_target != "sim_local" and shot_budget > settings.default_shot_budget:
             warn_for_target = True
 
-        if self._session_shots_used + shot_budget > settings.max_shots_per_session:
-            # In a more advanced implementation, we might reject the request.
-            # Here we clamp down to the remaining budget.
-            remaining = max(settings.max_shots_per_session - self._session_shots_used, 0)
-            shot_budget = max(remaining, 0)
+        accepted, usage = self._budget_tracker.reserve(
+            session_id=session_id,
+            requested=shot_budget,
+            max_shots_per_session=settings.max_shots_per_session,
+        )
+        if not accepted:
+            remaining = settings.max_shots_per_session - usage
+            raise BudgetExceeded(remaining=max(remaining, 0))
 
         return shot_budget, warn_for_target
 
-    def run_experiment(self, req: RunExperimentRequest) -> RunExperimentResponse:
+    def run_experiment(self, req: RunExperimentRequest, session_id: str) -> RunExperimentResponse:
         """Run a high-level SynQc experiment according to the request."""
-        effective_shot_budget, warn_for_target = self._apply_shot_guardrails(req)
+        effective_shot_budget, warn_for_target = self._apply_shot_guardrails(req, session_id)
 
         backend = get_backend(req.hardware_target)
         start = time.time()
         kpis = backend.run_experiment(req.preset, effective_shot_budget)
         end = time.time()
-
-        # Update session shot usage
-        self._session_shots_used += kpis.shots_used
 
         # Fill missing KPI fields and tweak status if guardrails were hit
         if kpis.shot_budget == 0:

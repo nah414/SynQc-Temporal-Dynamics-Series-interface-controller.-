@@ -38,7 +38,13 @@ pip install -e .
 Or install just the runtime deps:
 
 ```bash
-pip install fastapi uvicorn[standard] pydantic numpy
+pip install fastapi uvicorn[standard] pydantic numpy redis prometheus-client
+```
+
+For the optional load-test helper, install the `dev` extra to pull in `httpx`:
+
+```bash
+pip install -e .[dev]
 ```
 
 ---
@@ -56,7 +62,8 @@ Then you can access:
 - API docs: http://localhost:8001/docs
 - Health check: `GET /health`
 - Hardware targets: `GET /hardware/targets`
-- Run experiment: `POST /experiments/run`
+- Submit experiment run: `POST /runs` (or legacy `POST /experiments/run`)
+- Poll run status: `GET /runs/{id}`
 
 ---
 
@@ -95,7 +102,7 @@ The engine enforces:
 
 - A **maximum shot budget per experiment** (configurable via settings),
 - A soft warning if large shot budgets are used on non-simulator targets,
-- A simple per-process **session shot counter** (resets on restart).
+- A **Redis-backed session shot counter** with thread-safe in-memory fallback.
 
 Future work can extend this into persistent, per-user quotas.
 
@@ -129,9 +136,133 @@ can be isolated and reviewed.
 3. **Keep risk and quota logic in `engine.py`.**  
    This isolates safety-related reasoning in one place, making audits and changes easier.
 
-4. **Use clear version tags.**  
+4. **Use clear version tags.**
    Whenever major behavior changes, bump a version string somewhere visible (e.g. in `config.py`
    and the README) and log it.
+
+---
+
+## Production deployment: shared Redis for budgets and queue metrics
+
+Budgets and the background job queue can be coordinated across workers by pointing the backend to
+the same Redis instance:
+
+```bash
+export SYNQC_REDIS_URL=redis://redis-host:6379/0
+# Optional: extend session budget retention (default 3600s)
+export SYNQC_SESSION_BUDGET_TTL_SECONDS=7200
+```
+
+The health endpoint now exposes operational signals needed to validate multi-worker correctness:
+
+- `budget_tracker.redis_connected` and `budget_tracker.session_keys` to ensure Redis is reachable and holding the expected number of session budgets.
+- `queue.total`, `queue.queued`, `queue.running`, and `queue.oldest_queued_age_s` to verify that runs are flowing and no backlog is building up under load.
+
+Monitor `/health` while generating load to confirm counters move across workers and that Redis remains reachable.
+
+### Prometheus metrics, alerting, and scraping
+
+The backend exports Prometheus metrics on port `9000` by default (configurable via `SYNQC_METRICS_PORT`).
+Set `SYNQC_ENABLE_METRICS=false` to disable export, and adjust scrape cadence with `SYNQC_METRICS_COLLECTION_INTERVAL_SECONDS`.
+
+Key series to scrape:
+
+- `synqc_redis_connected{backend="redis|memory"}` — 1 when the budget tracker is reachable.
+- `synqc_budget_session_keys{backend="redis|memory"}` — current count of active session budget keys.
+- `synqc_budget_session_key_churn_total{backend="redis|memory"}` — cumulative changes in budget key counts (use `rate()` for churn alerts).
+- `synqc_queue_jobs_queued` / `synqc_queue_oldest_queued_age_seconds` — backlog depth and age to catch growing queues.
+- `synqc_queue_jobs_running` / `synqc_queue_max_workers` — current concurrency versus pool size.
+
+Scrape and alert setup:
+
+1. Add a scrape job pointed at the metrics exporter port. An example configuration (including alerting rules) lives at `backend/ops/prometheus-synqc-example.yml`; drop this into your Prometheus ConfigMap or `prometheus.yml` and tweak the target to match your deployment.
+2. If you use Prometheus Operator, convert the scrape job into a `ServiceMonitor` and the alerts into `PrometheusRule` resources. The expressions in the example file match the recommended guardrails in this README.
+3. Validate the configuration with `promtool check config prometheus-synqc-example.yml` (or your merged config) before rolling it out, then reload your Prometheus server so the scrape job is active.
+4. Confirm the job is live by hitting your Prometheus UI and querying `synqc_queue_jobs_queued` and `synqc_redis_connected` for the `synqc-backend` job.
+
+Example alerting rules (tune for your SLOs) are already embedded in `backend/ops/prometheus-synqc-example.yml` and cover Redis disconnects, queue backlogs, and budget-key churn spikes.
+
+### CI/staging Prometheus scrape + alert routing
+
+The GitHub Actions workflow now boots Prometheus and Alertmanager alongside the backend during load tests to prove we can scrape and route alerts in automation:
+
+- Prometheus uses `backend/ops/prometheus-ci-scrape.yml` to scrape `host.docker.internal:9000` (the metrics exporter) and sends alerts to the colocated Alertmanager on port `9093`.
+- Alertmanager uses `backend/ops/alertmanager-ci.yml` to forward alerts to a local webhook listener. The workflow fails if the webhook receives any alerts during a healthy run.
+
+To mirror this in staging, reuse the same configs with your target addresses:
+
+```bash
+docker run -d --name synqc-alertmanager \
+  -v $(pwd)/ops/alertmanager-ci.yml:/etc/alertmanager/alertmanager.yml \
+  --add-host host.docker.internal:host-gateway \
+  -p 9093:9093 prom/alertmanager:latest
+
+docker run -d --name synqc-prometheus \
+  -v $(pwd)/ops/prometheus-ci-scrape.yml:/etc/prometheus/prometheus.yml \
+  -v $(pwd)/ops/prometheus-synqc-example.yml:/etc/prometheus/synqc-alerts.yml \
+  --add-host host.docker.internal:host-gateway \
+  -p 9090:9090 prom/prometheus:latest
+```
+
+Then point `host.docker.internal:9000` at your staging exporter or swap in the hostname for your deployment. Wire the Alertmanager receiver to your preferred routing targets (email/Slack/PagerDuty) by editing `alertmanager-ci.yml`.
+
+### Staging/production paging routes
+
+Use `backend/ops/alertmanager-staging.yml` when you want to exercise real paging channels (Slack, PagerDuty, and an optional webhook mirror) while keeping the same alert rules. Render it via `envsubst` so your secrets stay outside of git:
+
+```bash
+export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."
+export SLACK_CHANNEL="#synqc-paging"
+export PAGERDUTY_ROUTING_KEY="<pagerduty-key>"
+export WEBHOOK_MIRROR_URL="https://alert-mirror.example.com/alerts"
+envsubst < backend/ops/alertmanager-staging.yml > /tmp/alertmanager.yml
+docker run -d --name synqc-alertmanager \
+  -v /tmp/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
+  --add-host host.docker.internal:host-gateway \
+  -p 9093:9093 prom/alertmanager:latest
+```
+
+Swap the webhook URL for a dead-simple HTTP sink (like [webhook.site](https://webhook.site/)) when validating staging before wiring real paging targets. Keep the CI webhook receiver enabled as a mirror so you can assert delivery while the paging routes stay live.
+
+When running the GitHub Actions load-test workflow against real paging channels, point `ALERTMANAGER_CONFIG_TEMPLATE` at the staging template and let the workflow render it (e.g., `ALERTMANAGER_CONFIG_TEMPLATE=backend/ops/alertmanager-staging.yml`). Secrets for Slack/PagerDuty/webhook destinations should be provided as repository or environment secrets consumed by `envsubst`.
+
+**GitHub Secrets to set for staging/production paging**
+
+- `SLACK_WEBHOOK_URL` — Incoming webhook for your paging channel.
+- `SLACK_CHANNEL` — Channel name (e.g., `#synqc-paging`).
+- `PAGERDUTY_ROUTING_KEY` — Events V2 routing key for the service.
+- `WEBHOOK_MIRROR_URL` — Optional HTTP sink to mirror alerts alongside paging.
+
+Set `ALERTMANAGER_CONFIG_TEMPLATE=backend/ops/alertmanager-staging.yml` as an environment or repository variable to make the CI/staging workflow render the staging template with the secrets above. If the staging template is selected and any of these secrets are missing, the workflow will now fail fast instead of silently rendering empty values.
+
+### Multi-worker load test to verify queue drain and budgets
+
+A lightweight load-test script lives at `backend/scripts/load_test.py` to exercise the queue and budgets while confirming metrics stay healthy:
+
+```bash
+python backend/scripts/load_test.py \
+  --base-url http://127.0.0.1:8001 \
+  --metrics-url http://127.0.0.1:9000/metrics \
+  --runs 60 --concurrency 15 \
+  --api-key "$SYNQC_API_KEY" \
+  --session-id "multi-worker-smoke"
+```
+
+What to look for:
+
+- `Runs finished` equals the number submitted.
+- `/health` shows `queue.queued == 0` and `queue.running == 0` when the test ends.
+- Metrics report `synqc_queue_jobs_queued == 0`, `synqc_redis_connected == 1`, and a bounded `synqc_budget_session_keys` value.
+
+Run this against multiple workers (e.g., `uvicorn --workers 4`) while pointing all instances at the same Redis URL. The script surfaces warnings if the queue fails to drain or Redis disconnects during the test so you can catch regressions early.
+
+The helper now defaults to `--strict`, exiting non-zero when queues fail to drain, Redis disconnects, metrics are unreachable, or runs remain unfinished. Disable with `--no-strict` for exploratory local checks. Use higher concurrency (e.g., `--runs 60 --concurrency 15`) in staging to mirror production-like load and validate alert thresholds before rollout; feel free to bump these further in a staging-only branch to probe headroom before production rollout.
+
+### CI coverage for Redis + queue safety
+
+A GitHub Actions workflow (`.github/workflows/backend-load-test.yml`) provisions Redis, boots the backend with a multi-worker queue, and runs `scripts/load_test.py --strict` against the live metrics exporter. This ensures queue depth returns to zero and Redis stays connected under concurrent submissions on every push and pull request that touches the backend. Use it as a template for your own CI pipeline if you mirror this repository internally. Adjust the environment variables and load-test flags there to run at higher concurrency (matching the staging example above) before promoting alert thresholds to production. Set `ALERTMANAGER_CONFIG_TEMPLATE` to `backend/ops/alertmanager-staging.yml` (rendered via `envsubst` inside the workflow) when you want the workflow to exercise real paging receivers instead of the CI webhook sink.
+
+Repository variables `LOAD_TEST_RUNS` and `LOAD_TEST_CONCURRENCY` can be used to raise the default pressure in the workflow without editing the YAML. Pair these with the staging Alertmanager template to probe headroom under paging-connected runs in staging branches.
 
 ---
 
