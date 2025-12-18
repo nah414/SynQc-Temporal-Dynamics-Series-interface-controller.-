@@ -27,8 +27,14 @@ def test_overbudget_run_persists_failure_for_listing(monkeypatch):
     assert resp.status_code == 202
     run_id = resp.json()["id"]
 
-    status = client.get(f"/runs/{run_id}").json()
-    assert status["status"] == "failed"
+    status_data = {}
+    for _ in range(10):
+        status = client.get(f"/runs/{run_id}")
+        assert status.status_code == 200
+        status_data = status.json()
+        if status_data["status"] in {"failed", "succeeded"}:
+            break
+    assert status_data.get("status") == "failed"
 
     listing = client.get("/experiments/recent?limit=10").json()
     found = next((r for r in listing if r["id"] == run_id), None)

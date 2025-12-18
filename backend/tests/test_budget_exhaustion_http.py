@@ -26,9 +26,13 @@ def test_budget_exhaustion_http_detail(monkeypatch):
     assert resp.status_code == 202
     run_id = resp.json()["id"]
 
-    status = client.get(f"/runs/{run_id}")
-    assert status.status_code == 200
-    data = status.json()
-    assert data["status"] == "failed"
+    data = {}
+    for _ in range(10):
+        status = client.get(f"/runs/{run_id}")
+        assert status.status_code == 200
+        data = status.json()
+        if data["status"] in {"failed", "succeeded"}:
+            break
+    assert data.get("status") == "failed"
     detail = data.get("error_detail") or {}
     assert detail.get("code") == "session_budget_exhausted"

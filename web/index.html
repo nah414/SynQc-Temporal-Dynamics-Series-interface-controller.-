@@ -1233,6 +1233,8 @@
     }
 
     const API_BASE = defaultApiBase();
+    // WARNING: Loading API keys from URL params can leak secrets via history/logs.
+    // Recommended only for non-production or short-lived tokens.
     const API_KEY = (() => {
       const params = new URLSearchParams(window.location.search);
       const fromParam = params.get('api_key') || params.get('key');

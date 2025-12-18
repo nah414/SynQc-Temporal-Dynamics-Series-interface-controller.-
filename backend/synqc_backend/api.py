@@ -35,7 +35,6 @@ budget_tracker = BudgetTracker(
     redis_url=settings.redis_url, session_ttl_seconds=settings.session_budget_ttl_seconds
 )
 engine = SynQcEngine(store=store, budget_tracker=budget_tracker)
-queue = JobQueue(engine.run_experiment, max_workers=settings.worker_pool_size)
 queue = JobQueue(engine.run_experiment, max_workers=settings.worker_pool_size, store=store)
 metrics_exporter = MetricsExporter(
     budget_tracker=budget_tracker,
