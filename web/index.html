@@ -289,10 +289,9 @@
     .console-grid {
       display: grid;
       grid-template-columns: minmax(260px, 320px) minmax(0, 1.9fr) minmax(260px, 0.9fr);
-      grid-template-rows: minmax(260px, 1.3fr) minmax(200px, 1fr) minmax(200px, 0.9fr);
+      grid-template-rows: repeat(2, minmax(260px, 1fr));
       grid-template-areas:
         "agent scene history"
-        "agent scene qubits"
         "agent scene qubits";
       gap: 1rem;
     }
@@ -323,11 +322,10 @@
     @media (max-width: 1100px) {
       .console-grid {
         grid-template-columns: minmax(260px, 320px) minmax(0, 1.6fr);
-        grid-template-rows: auto auto auto auto;
+        grid-template-rows: minmax(240px, auto) repeat(2, minmax(220px, 1fr));
         grid-template-areas:
           "scene scene"
           "agent history"
-          "agent qubits"
           "agent qubits";
       }
     }
@@ -507,17 +505,25 @@
         radial-gradient(circle at 80% 90%, rgba(106,229,255,0.18), transparent 60%),
         #050616;
       padding: 0.7rem; position: relative; overflow: hidden;
-      display: flex; flex-direction: column; gap: 0.8rem;
+      display: flex; flex-direction: column; gap: 0.6rem;
     }
     .scene-bloch-block { display: flex; flex-direction: column; gap: 0.45rem; }
+    .dpd-chip-row {
+      display: flex;
+      justify-content: center;
+      padding-top: 0.1rem;
+    }
     .dpd-label {
-      position: absolute; top: 0.6rem; right: 0.9rem;
-      font-size: 0.65rem; text-transform: uppercase;
-      letter-spacing: 0.12em; color: var(--text-soft);
-      background: rgba(5,6,20,0.9);
-      padding: 0.2rem 0.5rem; border-radius: 999px;
+      position: relative;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-soft);
+      background: rgba(5,6,20,0.92);
+      padding: 0.28rem 0.75rem;
+      border-radius: 999px;
       border: 1px solid rgba(123,132,200,0.5);
-      z-index: 3;
+      box-shadow: 0 6px 22px rgba(0,0,0,0.35);
     }
     .bloch-wrapper {
       display: flex; align-items: center; justify-content: center; padding-top: 0.2rem;
@@ -590,8 +596,10 @@
       box-shadow: inset 0 0 18px rgba(255,255,255,0.03), 0 20px 45px rgba(0,0,0,0.55);
       display: flex;
       flex-direction: column;
-      flex: 1;
+      flex: 0 0 auto;
+      width: 100%;
     }
+    .neural-wide { margin-top: 0.1rem; }
     .neural-head {
       display: flex;
       align-items: center;
@@ -729,6 +737,7 @@
       .neural-context { padding: 0.65rem 0.7rem; }
     }
     .panel-history { grid-area: history; display: flex; flex-direction: column; gap: 0.6rem; }
+    .panel-history, .panel-qubits { min-height: 360px; }
     .history-filters {
       display: flex; flex-wrap: wrap; gap: 0.35rem; font-size: 0.72rem;
     }
@@ -823,6 +832,11 @@
       background: rgba(5,7,20,0.85);
       padding: 0.55rem 0.6rem;
       line-height: 1.35;
+    }
+    @media (max-width: 640px) {
+      .panel-history, .panel-qubits { min-height: 320px; }
+      .history-table-wrap { min-height: 180px; }
+      .qubit-lattice { min-height: 240px; }
     }
     footer {
       position: relative; z-index: 1;
@@ -1267,7 +1281,9 @@
         </div>
         <div class="scene-main">
           <div class="scene-visual spectralized">
-            <div class="dpd-label">Drive · Probe · Drive</div>
+            <div class="dpd-chip-row">
+              <div class="dpd-label">Drive · Probe · Drive</div>
+            </div>
             <div class="scene-bloch-block">
               <div class="bloch-wrapper">
                 <div class="bloch-sphere spectralized" aria-label="Bloch sphere state visualization">
@@ -1293,21 +1309,6 @@
                 This visualization represents the effective state of a single qubit under a SynQc
                 Drive–Probe–Drive (DPD) protocol. The moving point suggests how your combined drive,
                 probe, and feedback operations move the state on (and off) the Bloch sphere in time.
-              </div>
-            </div>
-
-            <div class="neural-stack spectralized" aria-label="SynQc orchestration neural network">
-              <div class="neural-head">
-                <div>
-                  <div class="panel-sub">Neural orchestrator</div>
-                  <div class="neural-title">Temporal dynamics workflow</div>
-                </div>
-                <div class="neural-progress" id="workflowProgressValue">0%</div>
-              </div>
-              <div class="neural-web" id="neuralWeb" aria-hidden="true"></div>
-              <div class="neural-context">
-                <div class="context-chip">Live context</div>
-                <div class="context-body" id="workflowContext">Waiting for the next SynQc run…</div>
               </div>
             </div>
           </div>
@@ -1337,6 +1338,20 @@
                 behavior in plain language, derived from the raw KPIs.
               </div>
             </div>
+          </div>
+        </div>
+        <div class="neural-stack spectralized neural-wide" aria-label="SynQc orchestration neural network">
+          <div class="neural-head">
+            <div>
+              <div class="panel-sub">Neural orchestrator</div>
+              <div class="neural-title">Temporal dynamics workflow</div>
+            </div>
+            <div class="neural-progress" id="workflowProgressValue">0%</div>
+          </div>
+          <div class="neural-web" id="neuralWeb" aria-hidden="true"></div>
+          <div class="neural-context">
+            <div class="context-chip">Live context</div>
+            <div class="context-body" id="workflowContext">Waiting for the next SynQc run…</div>
           </div>
         </div>
       </section>
