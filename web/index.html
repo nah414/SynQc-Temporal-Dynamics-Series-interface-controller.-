@@ -40,6 +40,73 @@
       pointer-events: none;
       z-index: 0;
     }
+    .mobius-layer{
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.55;
+      mix-blend-mode: screen;
+    }
+    .mobius-wrap{
+      position: relative;
+      width: 420px;
+      height: 260px;
+      filter: drop-shadow(0 0 14px rgba(255,100,120,0.16));
+    }
+    .mobius-trace{
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at center, rgba(255,120,140,0.12), rgba(255,120,140,0));
+      opacity: 0.6;
+    }
+    .mobius-path{
+      position: absolute;
+      inset: 0;
+      background: conic-gradient(from 90deg, rgba(255,120,140,0.28), rgba(255,120,140,0), rgba(255,120,140,0.28), rgba(255,120,140,0));
+      filter: blur(12px);
+      opacity: 0.35;
+      transform: rotate(12deg);
+    }
+    .mobius-particle, .mobius-tail{
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 30%, #fff7f9, rgba(255,255,255,0));
+      box-shadow:
+        0 0 12px rgba(255,120,140,0.75),
+        0 0 30px rgba(255,120,140,0.35);
+      offset-path: path("M 210 130 C 300 30 420 230 210 260 C 0 230 120 30 210 130 Z");
+      offset-rotate: 0deg;
+      animation: mobiusOrbit 14s linear infinite;
+      mix-blend-mode: screen;
+    }
+    .mobius-tail{
+      width: 12px;
+      height: 12px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,180,190,0.85), rgba(255,120,140,0));
+      filter: blur(6px);
+      opacity: 0.55;
+      animation-duration: 18s;
+      animation-delay: -4s;
+    }
+    .mobius-tail.tail-2{
+      width: 16px;
+      height: 16px;
+      filter: blur(10px);
+      opacity: 0.35;
+      animation-duration: 22s;
+      animation-delay: -9s;
+    }
+    @keyframes mobiusOrbit{
+      from { offset-distance: 0%; }
+      to   { offset-distance: 100%; }
+    }
     .particle {
       position: absolute;
       width: 4px;
@@ -689,6 +756,15 @@
 <body>
   <div class="app">
     <div class="particle-layer" id="particleLayer"></div>
+    <div class="mobius-layer" aria-hidden="true">
+      <div class="mobius-wrap">
+        <div class="mobius-path"></div>
+        <div class="mobius-trace"></div>
+        <div class="mobius-tail"></div>
+        <div class="mobius-tail tail-2"></div>
+        <div class="mobius-particle"></div>
+      </div>
+    </div>
 
     <header>
       <div class="brand">
@@ -1201,6 +1277,7 @@
     const runStatus = document.getElementById('runStatus');
     const runAlert = document.getElementById('runAlert');
     const runAlertText = runAlert?.querySelector('.alert-text');
+    const urlKeyWarning = document.getElementById('urlKeyWarning');
 
     // Console history
     const historyBody = document.getElementById('historyBody');
@@ -1279,7 +1356,6 @@
     let healthCache = null;
 
     let selectedExperimentId = null;
-    const urlKeyWarning = document.getElementById('urlKeyWarning');
 
     function setRunStatus(text) {
       runStatus.textContent = text;
@@ -1869,32 +1945,6 @@
         if (err?.response?.error_detail?.message) {
           showRunAlert(err.response.error_detail.message);
         }
-      } finally {
-        runPresetBtn.disabled = false;
-      }
-    }
-
-    // Wrap fetch errors to surface server-provided error_detail when available
-    async function apiPost(path, payload) {
-      const res = await fetch(API_BASE + path, {
-        method: 'POST',
-        headers: Object.assign(
-          { 'Content-Type': 'application/json' },
-          API_KEY ? { 'X-Api-Key': API_KEY } : {}
-        ),
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        let detail = '';
-        let error_detail = null;
-        try {
-          const data = await res.json();
-          error_detail = data?.detail;
-          detail = data?.detail?.message || data?.detail || '';
-        } catch (_) { /* ignore */ }
-        const err = new Error(`HTTP ${res.status}${detail ? ` — ${detail}` : ''}`);
-        err.response = { error_detail }; // lightweight attachment for UI alerts
-        throw err;
       } finally {
         runPresetBtn.disabled = false;
       }

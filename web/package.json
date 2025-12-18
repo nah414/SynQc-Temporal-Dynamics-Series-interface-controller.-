@@ -1,0 +1,12 @@
+{
+  "name": "synqc-tds-web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "playwright:fetch": "node tools/install-playwright.js",
+    "test": "npm run playwright:fetch && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0"
+  }
+}
