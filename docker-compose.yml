@@ -7,6 +7,9 @@ services:
       - "8001:8001"
     volumes:
       - synqc_data:/data
+    environment:
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+      SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
     healthcheck:
       test:
         [

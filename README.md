@@ -110,6 +110,13 @@ static frontend with Nginx. From the repo root:
 docker compose up --build
 ```
 
+To enable a multi-worker backend in Docker Desktop, copy the sample environment file and
+adjust it as needed:
+
+```bash
+cp .env.example .env
+```
+
 Then open:
 
 - Frontend: http://127.0.0.1:8080/
@@ -133,6 +140,10 @@ To increase backend concurrency, set `UVICORN_WORKERS` when starting the stack:
 ```bash
 UVICORN_WORKERS=4 docker compose up --build
 ```
+
+The sample `.env` also enables a short `/health` response cache via
+`SYNQC_HEALTH_CACHE_TTL_SECONDS` to reduce backend work if you tighten healthcheck
+intervals.
 
 ---
 
