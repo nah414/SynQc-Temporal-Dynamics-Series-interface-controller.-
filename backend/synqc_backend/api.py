@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import List, Optional
+import atexit
 import secrets
+from pathlib import Path
+from threading import Lock
+from time import monotonic
+from typing import List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-import atexit
 
 from .budget import BudgetTracker
 from .config import settings
@@ -187,11 +189,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_HEALTH_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
+_HEALTH_CACHE_LOCK = Lock()
+
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
     """Simple health check endpoint."""
-    return {
+    ttl_seconds = settings.health_cache_ttl_seconds
+    if ttl_seconds > 0:
+        now = monotonic()
+        with _HEALTH_CACHE_LOCK:
+            cached_payload = _HEALTH_CACHE.get("payload")
+            expires_at = _HEALTH_CACHE.get("expires_at", 0.0)
+            if cached_payload and expires_at > now:
+                return cached_payload
+
+    payload = {
         "status": "ok",
         "env": settings.env,
         "max_shots_per_experiment": settings.max_shots_per_experiment,
@@ -213,6 +227,11 @@ def health() -> dict:
         "control_profile": control_store.get(),
         "qubit_usage": qubit_tracker.health(),
     }
+    if ttl_seconds > 0:
+        with _HEALTH_CACHE_LOCK:
+            _HEALTH_CACHE["payload"] = payload
+            _HEALTH_CACHE["expires_at"] = monotonic() + ttl_seconds
+    return payload
 
 
 @app.get("/controls/profile", response_model=ControlProfile, tags=["controls"])

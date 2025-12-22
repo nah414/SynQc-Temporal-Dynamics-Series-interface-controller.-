@@ -101,6 +101,52 @@ If your backend isn’t on `localhost:8001`, open:
 
 ---
 
+## Run it in Docker Desktop
+
+This repo ships with a `docker-compose.yml` that builds the FastAPI backend and serves the
+static frontend with Nginx. From the repo root:
+
+```bash
+docker compose up --build
+```
+
+To enable a multi-worker backend in Docker Desktop, copy the sample environment file and
+adjust it as needed:
+
+```bash
+cp .env.example .env
+```
+
+Then open:
+
+- Frontend: http://127.0.0.1:8080/
+- Backend docs: http://127.0.0.1:8001/docs
+
+To stop and clean up containers:
+
+```bash
+docker compose down
+```
+
+The backend uses a named volume (`synqc_data`) so SQLite queue data survives restarts. Remove it
+when you want a clean slate:
+
+```bash
+docker compose down -v
+```
+
+To increase backend concurrency, set `UVICORN_WORKERS` when starting the stack:
+
+```bash
+UVICORN_WORKERS=4 docker compose up --build
+```
+
+The sample `.env` also enables a short `/health` response cache via
+`SYNQC_HEALTH_CACHE_TTL_SECONDS` to reduce backend work if you tighten healthcheck
+intervals.
+
+---
+
 ## Security note (why the XSS fix matters)
 
 Any time user text or backend text touches the DOM, treat it as hostile input.  

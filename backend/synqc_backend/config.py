@@ -93,6 +93,12 @@ class SynQcSettings(BaseSettings):
     )
     metrics_collection_interval_seconds: int = Field(default=15, ge=5)
 
+    health_cache_ttl_seconds: int = Field(
+        default=3,
+        ge=0,
+        description="Cache /health responses for this many seconds (0 disables)",
+    )
+
     # Provider backends
     allow_provider_simulation: bool = Field(
         default=False,
