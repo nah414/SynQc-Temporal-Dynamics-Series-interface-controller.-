@@ -1,13 +1,35 @@
+# git
 .git
+.github
+
+# python cache
 **/__pycache__/
 **/*.pyc
 **/*.pyo
-**/*.pyd
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# env & virtual envs
 .venv
+.venv/
 venv
+venv/
 .env
-.DS_Store
+
+# ide
 .idea
 .vscode
+.DS_Store
+
+# backend
 backend/.pytest_cache
 backend/.mypy_cache
+
+# node
+**/node_modules/
+
+# repo extras not needed in runtime images
+docs/
+gpt/
+*.zip
