@@ -233,12 +233,12 @@ Key series to scrape:
 
 Scrape and alert setup:
 
-1. Add a scrape job pointed at the metrics exporter port. An example configuration (including alerting rules) lives at `backend/ops/prometheus-synqc-example.yml`; drop this into your Prometheus ConfigMap or `prometheus.yml` and tweak the target to match your deployment.
+1. Add a scrape job pointed at the metrics exporter port. A starter scrape job lives at `backend/ops/prometheus-synqc-example.yml`; drop this into your Prometheus ConfigMap or `prometheus.yml` and tweak the target to match your deployment.
 2. If you use Prometheus Operator, convert the scrape job into a `ServiceMonitor` and the alerts into `PrometheusRule` resources. The expressions in the example file match the recommended guardrails in this README.
 3. Validate the configuration with `promtool check config prometheus-synqc-example.yml` (or your merged config) before rolling it out, then reload your Prometheus server so the scrape job is active.
 4. Confirm the job is live by hitting your Prometheus UI and querying `synqc_queue_jobs_queued` and `synqc_redis_connected` for the `synqc-backend` job.
 
-Example alerting rules (tune for your SLOs) are already embedded in `backend/ops/prometheus-synqc-example.yml` and cover Redis disconnects, queue backlogs, and budget-key churn spikes.
+Alerting rules (tune for your SLOs) are now factored into `backend/ops/synqc-alerts.yml` and cover Redis disconnects, queue backlogs, and budget-key churn spikes. Mount or merge this rules file wherever your Prometheus server expects rule definitions.
 
 ### CI/staging Prometheus scrape + alert routing
 
@@ -257,7 +257,7 @@ docker run -d --name synqc-alertmanager \
 
 docker run -d --name synqc-prometheus \
   -v $(pwd)/ops/prometheus-ci-scrape.yml:/etc/prometheus/prometheus.yml \
-  -v $(pwd)/ops/prometheus-synqc-example.yml:/etc/prometheus/synqc-alerts.yml \
+  -v $(pwd)/ops/synqc-alerts.yml:/etc/prometheus/synqc-alerts.yml \
   --add-host host.docker.internal:host-gateway \
   -p 9090:9090 prom/prometheus:latest
 ```
