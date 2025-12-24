@@ -15,8 +15,11 @@ from .models import (
     ExperimentStatus,
     KpiBundle,
     KpiDetail,
+    MeasurementDescriptor,
+    NoiseDescriptor,
     RunExperimentRequest,
     RunExperimentResponse,
+    ShotUsage,
     WorkflowStep,
 )
 from .qubit_usage import SessionQubitTracker
@@ -246,12 +249,17 @@ class SynQcEngine:
 
         kpi_details: list[KpiDetail] = []
         kpi_map = {
-            "fidelity": kpis.fidelity,
-            "latency_us": kpis.latency_us,
-            "backaction": kpis.backaction,
+            "fidelity": {"value": kpis.fidelity, "units": None, "kind": "estimate"},
+            "latency_us": {
+                "value": kpis.latency_us,
+                "units": "microseconds",
+                "kind": "latency",
+            },
+            "backaction": {"value": kpis.backaction, "units": None, "kind": "estimate"},
         }
 
-        for name, value in kpi_map.items():
+        for name, props in kpi_map.items():
+            value = props["value"]
             if value is None:
                 continue
             definition_id = kpi_definition_id_for_name(name)
@@ -259,6 +267,9 @@ class SynQcEngine:
                 "name": name,
                 "value": value,
                 "definition_id": definition_id,
+                "definition_ref": definition_id,
+                "kind": props.get("kind"),
+                "units": props.get("units"),
             }
 
             if (
@@ -274,6 +285,9 @@ class SynQcEngine:
                 except ValueError:
                     # If the inputs are degenerate, skip CI instead of failing the run.
                     pass
+
+            if "ci95" in detail_kwargs:
+                detail_kwargs["ci_95"] = detail_kwargs.get("ci95")
 
             kpi_details.append(KpiDetail(**detail_kwargs))
 
@@ -328,11 +342,25 @@ class SynQcEngine:
             hardware_target=req.hardware_target,
             kpis=kpis,
             created_at=end,
+            shots=ShotUsage(requested=effective_shot_budget, executed=kpis.shots_used),
+            measurement=MeasurementDescriptor(
+                model=physics_contract.measurement.model,
+                basis=physics_contract.measurement.basis,
+                povm=physics_contract.measurement.povm,
+                descriptor=physics_contract.measurement.notes,
+            ),
+            noise=NoiseDescriptor(
+                model=physics_contract.noise.model,
+                params=physics_contract.noise.params,
+                descriptor=physics_contract.noise.notes,
+            ),
+            assumptions=list(physics_contract.assumptions),
             qubits_used=qubits_used,
             notes=req.notes,
             control_profile=active_controls,
             physics_contract=physics_contract,
             kpi_details=kpi_details or None,
+            kpi_observations=kpi_details or None,
             workflow_trace=self._build_workflow_trace(req, kpis, active_controls),
         )
 
