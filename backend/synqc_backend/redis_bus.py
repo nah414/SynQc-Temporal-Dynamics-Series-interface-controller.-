@@ -76,9 +76,19 @@ async def redis_ping() -> Dict[str, Any]:
         t0 = time.perf_counter()
         ok = await client.ping()
         latency_ms = (time.perf_counter() - t0) * 1000.0
-        return {"enabled": True, "ok": bool(ok), "latency_ms": latency_ms, "url": settings.url}
+        return {
+            "enabled": True,
+            "ok": bool(ok),
+            "latency_ms": latency_ms,
+            "client": settings.client_name,
+        }
     except Exception as exc:  # pragma: no cover - runtime probe
-        return {"enabled": True, "ok": False, "detail": repr(exc), "url": settings.url}
+        return {
+            "enabled": True,
+            "ok": False,
+            "detail": repr(exc),
+            "client": settings.client_name,
+        }
 
 
 def _now_ms() -> int:

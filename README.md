@@ -124,7 +124,7 @@ targets the bundled Redis container. Redis runs with append-only persistence, a 
 (`redis-cli ping`), and a host-only port mapping (`127.0.0.1:6379:6379`) for optional CLI access
 from the host.
 
-After the stack is up, confirm Redis connectivity and the API health cache via:
+After the stack is up, confirm Redis connectivity and the API health check via:
 
 ```bash
 docker compose ps

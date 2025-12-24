@@ -98,6 +98,25 @@ async def test_publish_event_enqueues_payload(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_publish_event_uses_custom_channel(monkeypatch):
+    published = {}
+
+    class StubRedis:
+        async def publish(self, channel, message):  # pragma: no cover - exercised
+            published["channel"] = channel
+            published["message"] = message
+
+    async def fake_get_redis():
+        return StubRedis()
+
+    monkeypatch.setattr(redis_bus, "get_redis", fake_get_redis)
+
+    await redis_bus.publish_event("demo", {"foo": "bar"}, channel="custom:channel")
+
+    assert published["channel"] == "custom:channel"
+
+
+@pytest.mark.anyio
 async def test_redis_ping_disabled(monkeypatch):
     monkeypatch.setenv("REDIS_ENABLED", "false")
 
@@ -127,6 +146,6 @@ async def test_redis_ping_reports_latency(monkeypatch):
 
     assert result["enabled"] is True
     assert result["ok"] is True
-    assert result["url"] == "redis://localhost:6379/0"
+    assert result["client"] == "synqc-backend"
     assert result["latency_ms"] >= 0
     assert stub.calls == 1
