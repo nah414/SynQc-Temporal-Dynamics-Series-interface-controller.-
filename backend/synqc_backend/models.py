@@ -117,9 +117,66 @@ class KpiDetail(BaseModel):
     name: str
     value: Optional[Any] = None
     definition_id: str
+    definition_ref: Optional[str] = Field(
+        default=None,
+        description="Stable definition reference id (e.g., F_dist_v1).",
+    )
+    kind: Optional[str] = Field(
+        default="scalar",
+        description="Classification for rendering (e.g., scalar, probability, latency).",
+    )
+    units: Optional[str] = Field(
+        default=None,
+        description="Unit string for the KPI value, if applicable.",
+    )
     ci95: Optional[List[float]] = Field(
         default=None,
         description="Optional [lo, hi] confidence interval when sampling-based KPIs are estimated.",
+    )
+    ci_95: Optional[List[float]] = Field(
+        default=None,
+        description="Alias for ci95 for UI-facing payloads.",
+        alias="ci_95",
+    )
+    stderr: Optional[float] = Field(
+        default=None,
+        description="Standard error for estimates when available.",
+    )
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
+        data = super().model_dump(*args, **kwargs)
+        if data.get("ci_95") is None and data.get("ci95") is not None:
+            data["ci_95"] = data["ci95"]
+        if data.get("definition_ref") is None:
+            data["definition_ref"] = data.get("definition_id")
+        return data
+
+
+class ShotUsage(BaseModel):
+    """Requested/executed shot counts for an experiment."""
+
+    requested: Optional[int] = None
+    executed: Optional[int] = None
+
+
+class MeasurementDescriptor(BaseModel):
+    """Measurement model descriptor for transparency in KPI interpretation."""
+
+    model: str
+    basis: Optional[str] = None
+    povm: Optional[str] = None
+    descriptor: Optional[str] = Field(
+        default=None, description="Human-readable POVM descriptor or measurement notes."
+    )
+
+
+class NoiseDescriptor(BaseModel):
+    """Noise model descriptor for experiment metadata."""
+
+    model: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+    descriptor: Optional[str] = Field(
+        default=None, description="Optional human-readable description of the noise model."
     )
 
 class RunExperimentResponse(BaseModel):
@@ -130,6 +187,22 @@ class RunExperimentResponse(BaseModel):
     hardware_target: str
     kpis: KpiBundle
     created_at: float
+    shots: Optional[ShotUsage] = Field(
+        default=None,
+        description="Requested/executed shot counts for this experiment.",
+    )
+    measurement: Optional[MeasurementDescriptor] = Field(
+        default=None,
+        description="Measurement model descriptor (projective basis or POVM).",
+    )
+    noise: Optional[NoiseDescriptor] = Field(
+        default=None,
+        description="Noise model descriptor for transparency in KPIs.",
+    )
+    assumptions: List[str] = Field(
+        default_factory=list,
+        description="Human-readable flags clarifying modeling assumptions.",
+    )
     qubits_used: int = Field(
         default=0,
         description="Estimated number of qubits entangled/active during the run.",
@@ -143,6 +216,12 @@ class RunExperimentResponse(BaseModel):
     kpi_details: Optional[List[KpiDetail]] = Field(
         default=None,
         description="Per-KPI definitions and optional uncertainty bounds.",
+    )
+    kpi_observations: Optional[List[KpiDetail]] = Field(
+        default=None,
+        description=(
+            "UI-friendly KPI descriptors with names, kinds, units, references, and uncertainty bounds."
+        ),
     )
     error_detail: Optional[dict] = None
     workflow_trace: List[WorkflowStep] = Field(
@@ -186,6 +265,10 @@ class ExperimentSummary(BaseModel):
     hardware_target: str
     kpis: KpiBundle
     created_at: float
+    shots: Optional[ShotUsage] = None
+    measurement: Optional[MeasurementDescriptor] = None
+    noise: Optional[NoiseDescriptor] = None
+    assumptions: List[str] = Field(default_factory=list)
     qubits_used: int = Field(
         default=0,
         description="Estimated number of qubits entangled/active during the run.",
@@ -193,6 +276,7 @@ class ExperimentSummary(BaseModel):
     control_profile: Optional[ControlProfile] = None
     physics_contract: Optional[PhysicsContract] = None
     kpi_details: Optional[List[KpiDetail]] = None
+    kpi_observations: Optional[List[KpiDetail]] = None
     error_detail: Optional[dict] = None
 
 

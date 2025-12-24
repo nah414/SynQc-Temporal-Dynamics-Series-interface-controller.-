@@ -54,10 +54,15 @@ class ExperimentStore:
                     hardware_target=r.hardware_target,
                     kpis=r.kpis,
                     created_at=r.created_at,
+                    shots=r.shots,
+                    measurement=r.measurement,
+                    noise=r.noise,
+                    assumptions=r.assumptions,
                     qubits_used=r.qubits_used,
                     control_profile=r.control_profile,
                     physics_contract=r.physics_contract,
                     kpi_details=r.kpi_details,
+                    kpi_observations=r.kpi_observations,
                     error_detail=r.error_detail,
                 )
                 for r in runs_sorted[:limit]
