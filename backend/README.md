@@ -22,6 +22,19 @@ This package provides:
 > should be plugged into `synqc_backend.hardware_backends` in a controlled way, without
 > touching the API contracts.
 
+### Qiskit integration (Aer simulators or IBM Quantum)
+
+- Install optional dependencies with `pip install -e .[qiskit]` to pull in `qiskit`, `qiskit-aer`, and `qiskit-ibm-runtime`.
+- Point a SynQc backend id at a Qiskit backend by setting `SYNQC_QISKIT_BACKEND_<BACKEND_ID>`.
+  - Example: `SYNQC_QISKIT_BACKEND_IBM_QUANTUM=aer_simulator` wires IBM Quantum runs through Qiskit's Aer simulator.
+  - Any backend name resolvable by `qiskit_aer.Aer.get_backend` is supported; the engine will still enforce shot budgets.
+- Optional cloud backdoor: if you have IBM Quantum Runtime credentials, set `SYNQC_QISKIT_RUNTIME_TOKEN`,
+  `SYNQC_QISKIT_RUNTIME_CHANNEL` (e.g., `cloud`), and/or `SYNQC_QISKIT_RUNTIME_INSTANCE` to resolve the backend from
+  IBM Quantum Runtime instead of Aer. The same backend id mapping is used, so you can toggle between local and cloud
+  by changing environment variables.
+- When the variable is present, the engine swaps in the Qiskit provider client for that backend id so KPI extraction can use
+  live Qiskit counts instead of synthetic draws. Leave the variable unset to continue using the built-in simulator.
+
 ---
 
 ## Requirements

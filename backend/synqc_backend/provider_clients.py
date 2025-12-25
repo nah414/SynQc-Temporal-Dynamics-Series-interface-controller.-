@@ -86,11 +86,11 @@ def load_provider_clients() -> dict[str, BaseProviderClient]:
     """
 
     clients: dict[str, BaseProviderClient] = {}
-    prefix = "SYNQC_PROVIDER_PAYLOAD_"
+    payload_prefix = "SYNQC_PROVIDER_PAYLOAD_"
     for key, value in os.environ.items():
-        if not key.startswith(prefix):
+        if not key.startswith(payload_prefix):
             continue
-        backend_id = key[len(prefix) :].lower()
+        backend_id = key[len(payload_prefix) :].lower()
         if not value:
             continue
         try:
@@ -104,4 +104,26 @@ def load_provider_clients() -> dict[str, BaseProviderClient]:
                 key,
             )
             continue
+
+    qiskit_prefix = "SYNQC_QISKIT_BACKEND_"
+    for key, backend_name in os.environ.items():
+        if not key.startswith(qiskit_prefix):
+            continue
+
+        backend_id = key[len(qiskit_prefix) :].lower()
+        if not backend_name:
+            continue
+
+        try:
+            from .qiskit_provider import QiskitProviderClient
+
+            clients[backend_id] = QiskitProviderClient(backend_name=backend_name)
+        except Exception:
+            logger.exception(
+                "Failed to initialize Qiskit provider client for backend '%s' from env var '%s'",
+                backend_id,
+                key,
+            )
+            continue
+
     return clients
