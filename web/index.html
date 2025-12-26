@@ -1139,6 +1139,7 @@
                 <option value="latency">Latency Characterization</option>
                 <option value="grover_demo">Grover search (Qiskit/Aer)</option>
                 <option value="backend_compare">Backend A/B Comparison</option>
+                <option value="grover_demo">Grover energy search (demo)</option>
                 <option value="dpd_demo">Guided SynQc DPD Example</option>
               </select>
             </div>
@@ -2051,6 +2052,7 @@
       if (preset === 'latency') return 'Latency probe';
       if (preset === 'grover_demo') return 'Grover search (Qiskit/Aer)';
       if (preset === 'backend_compare') return 'Backend compare';
+      if (preset === 'grover_demo') return 'Grover energy search';
       if (preset === 'dpd_demo') return 'DPD demo';
       return preset;
     }
@@ -2709,6 +2711,17 @@
                      lat > 25 ? 'Moderate delay; keep an eye on drift and queueing.' :
                      'Fast path looks healthy.';
         return `Latency characterization completed on ${hwName}. End-to-end latency: ~${lat.toFixed(1)} µs. ${note}`;
+      }
+
+      if (run.preset === 'grover_demo') {
+        const fid = Number.isFinite(Number(k.fidelity)) ? Number(k.fidelity) : null;
+        const budget = Number.isFinite(Number(k.shot_budget)) ? Number(k.shot_budget) : null;
+        const base = `Grover energy search completed on ${hwName}.`;
+        const fidText = fid == null
+          ? ' Fidelity was not reported by the backend; success probability will be derived from the returned counts.'
+          : ` Estimated marked-state success ~${fid.toFixed(3)}.`;
+        const budgetText = budget != null ? ` Adaptive shot cap: ${budget.toLocaleString()} shots.` : '';
+        return `${base}${fidText}${budgetText}`;
       }
 
       if (run.preset === 'backend_compare') {

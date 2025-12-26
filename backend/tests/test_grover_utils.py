@@ -104,6 +104,31 @@ def test_energy_aware_respects_cap(monkeypatch):
     assert sum(counts.values()) == shots_used
 
 
+def test_energy_aware_confidence_floor_respects_cap(monkeypatch):
+    shot_sequence: list[int] = []
+    confidence_floor = grover.min_shots_for_confidence(eps=0.2, delta=0.2)
+    tight_cap = max(1, confidence_floor - 2)
+
+    def fake_run(cfg: GroverConfig):
+        shot_sequence.append(cfg.shots)
+        return {"000": cfg.shots}
+
+    monkeypatch.setattr(grover, "run_grover", fake_run)
+
+    cfg = GroverConfig(n_qubits=3, marked=["101"], shots=1, seed_sim=None)
+    shots_used, counts, success = grover.energy_aware_search(
+        cfg,
+        target_success=0.8,
+        eps=0.2,
+        delta=0.2,
+        max_shots_cap=tight_cap,
+        verbose=False,
+    )
+
+    assert shot_sequence == [tight_cap]
+    assert shots_used == tight_cap
+    assert success == 0.0
+    assert sum(counts.values()) == shots_used
 def test_local_simulator_grover_preset_obeys_budget(monkeypatch):
     monkeypatch_calls: list[int] = []
 
