@@ -2146,6 +2146,9 @@
     }
 
     const SHOR_LIVE_ALLOW_QUERY_AUTH = Boolean(window.SHOR_LIVE_ALLOW_QUERY_AUTH);
+    const SHOR_LIVE_TOKEN_TTL_BUFFER_MS = 5000;
+    let SHOR_LIVE_TOKEN_PATH = '/shor/runs/live-token';
+    let shorLiveTokenCache = null;
 
     function shorAuthQuery() {
       if (!SHOR_LIVE_ALLOW_QUERY_AUTH) {
@@ -2165,22 +2168,69 @@
       return params.toString();
     }
 
-    function shorStreamUrl(path) {
-      const base = path.startsWith('http') ? path : `${API_BASE}${path}`;
-      const qs = shorAuthQuery();
-      if (!qs) return base;
-      return `${base}${base.includes('?') ? '&' : '?'}${qs}`;
+    function isShorLiveTokenFresh(tokenObj) {
+      if (!tokenObj || (!tokenObj.token && !tokenObj.url)) return false;
+      if (!tokenObj.expires_at) return true;
+      const exp = new Date(tokenObj.expires_at).getTime();
+      if (!Number.isFinite(exp)) return true;
+      return exp - Date.now() > SHOR_LIVE_TOKEN_TTL_BUFFER_MS;
     }
 
-    function shorWebSocketUrl(path) {
+    async function fetchShorLiveToken(mode = 'sse') {
+      if (!SHOR_LIVE_TOKEN_PATH) return null;
+      if (isShorLiveTokenFresh(shorLiveTokenCache)) return shorLiveTokenCache;
+
+      try {
+        const res = await apiPost(SHOR_LIVE_TOKEN_PATH, { mode });
+        const directUrl = res?.url || res?.stream_url || res?.ws_url || res?.endpoint;
+        const token = res?.token || res?.live_token || res?.access_token || res?.signed_token || res?.signed_url || res;
+        const expires_at = res?.expires_at || res?.exp || res?.expiry || null;
+        if (typeof token === 'string' && token) {
+          shorLiveTokenCache = { token, expires_at, url: typeof directUrl === 'string' ? directUrl : null };
+          return shorLiveTokenCache;
+        }
+        if (typeof directUrl === 'string' && directUrl) {
+          shorLiveTokenCache = { token: null, expires_at, url: directUrl };
+          return shorLiveTokenCache;
+        }
+      } catch (err) {
+        console.warn('Shor live token unavailable', err);
+      }
+
+      shorLiveTokenCache = null;
+      return null;
+    }
+
+    async function shorStreamUrl(path, opts = {}) {
+      const base = path.startsWith('http') ? path : `${API_BASE}${path}`;
+      const parts = [];
+      const qs = shorAuthQuery();
+      if (qs) parts.push(qs);
+      const token = await fetchShorLiveToken(opts.mode || 'sse');
+      if (token?.url) return token.url;
+      const tokenValue = typeof token === 'string' ? token : token?.token;
+      if (tokenValue) parts.push(`live_token=${encodeURIComponent(tokenValue)}`);
+      const final = parts.filter(Boolean).join('&');
+      if (!final) return base;
+      return `${base}${base.includes('?') ? '&' : '?'}${final}`;
+    }
+
+    async function shorWebSocketUrl(path, opts = {}) {
       const full = path.startsWith('http') ? path : `${API_BASE}${path}`;
       try {
         const url = new URL(full);
         url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const parts = [];
         const qs = shorAuthQuery();
-        if (qs) {
+        if (qs) parts.push(qs);
+        const token = await fetchShorLiveToken(opts.mode || 'ws');
+        if (token?.url) return token.url;
+        const tokenValue = typeof token === 'string' ? token : token?.token;
+        if (tokenValue) parts.push(`live_token=${encodeURIComponent(tokenValue)}`);
+        const final = parts.filter(Boolean).join('&');
+        if (final) {
           const connector = url.search ? '&' : '?';
-          url.search = `${url.search || ''}${connector}${qs}`;
+          url.search = `${url.search || ''}${connector}${final}`;
         }
         return url.toString();
       } catch (_) {
@@ -2203,6 +2253,7 @@
     let controlProfileCache = null;
 
     const shorUrlParams = new URLSearchParams(window.location.search);
+    SHOR_LIVE_TOKEN_PATH = shorUrlParams.get('shor_live_token_path') || SHOR_LIVE_TOKEN_PATH;
     const SHOR_STREAM_PATH = shorUrlParams.get('shor_stream') || '/shor/runs/stream';
     const SHOR_WS_PATH = shorUrlParams.get('shor_ws') || '/shor/runs/ws';
 
@@ -2752,7 +2803,7 @@
       shorRunSocket = null;
     }
 
-    function startShorLiveChannel() {
+    async function startShorLiveChannel() {
       stopShorLiveChannel();
 
       const onLiveError = (label) => {
@@ -2769,7 +2820,8 @@
 
       if (window.EventSource) {
         try {
-          const es = new EventSource(shorStreamUrl(SHOR_STREAM_PATH), { withCredentials: true });
+          const streamUrl = await shorStreamUrl(SHOR_STREAM_PATH, { mode: 'sse' });
+          const es = new EventSource(streamUrl, { withCredentials: true });
           shorRunEventSource = es;
           es.onmessage = (evt) => {
             try {
@@ -2791,7 +2843,7 @@
 
       if ('WebSocket' in window) {
         try {
-          const wsUrl = shorWebSocketUrl(SHOR_WS_PATH);
+          const wsUrl = await shorWebSocketUrl(SHOR_WS_PATH, { mode: 'ws' });
           if (!wsUrl) throw new Error('WebSocket URL invalid');
           const sock = new WebSocket(wsUrl);
           shorRunSocket = sock;
