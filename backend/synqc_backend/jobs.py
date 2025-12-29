@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import inspect
 import logging
 import time
 import uuid
@@ -105,9 +106,15 @@ class JobQueue:
         if persistence_path and SqliteJobStore:
             self._persist = SqliteJobStore(persistence_path)
 
-        # Cooperative cancel support: if worker_fn accepts a 3rd arg, pass cancel_event
+        # Cooperative cancel support and optional id propagation
         sig = inspect.signature(worker_fn)
-        self._supports_cancel_event = len(sig.parameters) >= 3
+        params = sig.parameters
+        self._supports_cancel_event = "cancel_event" in params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+        )
+        self._accepts_run_id = "run_id" in params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+        )
 
         if self._persist and rehydrate:
             # Mark "running" jobs as failed (safe default)
@@ -302,10 +309,13 @@ class JobQueue:
 
         try:
             # cooperative cancel: only works if worker_fn checks cancel_event
+            kwargs = {}
             if self._supports_cancel_event:
-                result = self._worker_fn(record.request, session_id, cancel_event)
-            else:
-                result = self._worker_fn(record.request, session_id)
+                kwargs["cancel_event"] = cancel_event
+            if getattr(self, "_accepts_run_id", False):
+                kwargs["run_id"] = record.id
+
+            result = self._worker_fn(record.request, session_id, **kwargs)
 
             with self._lock:
                 # If timeout/cancel already marked it failed, do not overwrite.

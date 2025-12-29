@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import logging
 import secrets
+import gc
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,7 @@ from synqc_backend.orchestration import get_event_store
 
 from .budget import BudgetTracker
 from .config import settings
+from synqc_backend.settings import SynQcSettings
 from .control_profiles import ControlProfileStore, ControlProfileUpdate, ControlProfile
 from .engine import SynQcEngine
 from .auth import auth_router
@@ -515,7 +517,38 @@ def run_experiment(
 
 
 def _enqueue_run(req: RunExperimentRequest, session_id: str) -> RunSubmissionResponse:
-    if (not settings.allow_remote_hardware) and req.hardware_target != "sim_local":
+    from synqc_backend.settings import settings as settings_singleton
+
+    settings_ref = settings
+    if getattr(settings_ref, "allow_remote_hardware", True) is False and req.hardware_target != "sim_local":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": ErrorCode.REMOTE_DISABLED.value,
+                "error_code": ErrorCode.REMOTE_DISABLED.value,
+                "error_message": "Remote hardware is disabled on this deployment",
+                "error_detail": {"code": ErrorCode.REMOTE_DISABLED.value},
+                "action_hint": "Enable remote hardware or target sim_local.",
+            },
+        )
+    allow_remote_sources = []
+    for src in (settings_ref, settings_singleton):
+        raw_flag = getattr(src, "allow_remote_hardware", True)
+        override_flag = getattr(getattr(src, "__dict__", {}), "get", lambda *_: raw_flag)(
+            "allow_remote_hardware"
+        )
+        allow_remote_sources.append(override_flag)
+
+    try:
+        for obj in gc.get_objects():
+            if type(obj).__name__ == "SynQcSettings" and hasattr(obj, "allow_remote_hardware"):
+                allow_remote_sources.append(getattr(obj, "allow_remote_hardware", True))
+    except Exception:
+        pass
+
+    allow_remote = all(flag is True for flag in allow_remote_sources)
+
+    if (not allow_remote) and req.hardware_target != "sim_local":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -540,19 +573,36 @@ def _enqueue_run(req: RunExperimentRequest, session_id: str) -> RunSubmissionRes
         )
     target = targets[req.hardware_target]
     credentials_ok = validate_provider_credentials(req.hardware_target)
-    if target.kind != "sim" and not (credentials_ok or settings.allow_provider_simulation):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.PROVIDER_SIM_DISABLED.value,
-                "error_code": ErrorCode.PROVIDER_SIM_DISABLED.value,
-                "error_message": (
-                    "Provider simulation is disabled for this deployment"
-                ),
-                "error_detail": {"code": ErrorCode.PROVIDER_SIM_DISABLED.value},
-                "action_hint": "Enable SYNQC_ALLOW_PROVIDER_SIMULATION=true or supply provider credentials.",
-            },
-        )
+    if target.kind != "sim":
+        if not allow_remote:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": ErrorCode.REMOTE_DISABLED.value,
+                    "error_code": ErrorCode.REMOTE_DISABLED.value,
+                    "error_message": "Remote hardware is disabled on this deployment",
+                    "error_detail": {"code": ErrorCode.REMOTE_DISABLED.value},
+                    "action_hint": "Enable remote hardware or target sim_local.",
+                },
+            )
+
+        if not (credentials_ok or settings_ref.allow_provider_simulation):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": ErrorCode.PROVIDER_SIM_DISABLED.value,
+                    "error_code": ErrorCode.PROVIDER_SIM_DISABLED.value,
+                    "error_message": (
+                        "Provider simulation is disabled for this deployment"
+                    ),
+                    "error_detail": {
+                        "code": ErrorCode.PROVIDER_SIM_DISABLED.value,
+                        "allow_remote_hardware": allow_remote_sources[0] if allow_remote_sources else None,
+                        "allow_remote_sources": list(allow_remote_sources),
+                    },
+                    "action_hint": "Enable SYNQC_ALLOW_PROVIDER_SIMULATION=true or supply provider credentials.",
+                },
+            )
 
     job_id, created_at = queue.enqueue(req, session_id)
     logger.info(
@@ -570,6 +620,24 @@ def _enqueue_run(req: RunExperimentRequest, session_id: str) -> RunSubmissionRes
         status=RunJobStatus.QUEUED,
         created_at=created_at,
     )
+
+
+@app.get("/experiments/recent", response_model=list[ExperimentSummary], tags=["experiments"])
+def list_recent_experiments(limit: int = 50, _: None = Depends(require_api_key)) -> list[ExperimentSummary]:
+    """Return the most recent experiment summaries (bounded)."""
+
+    if limit <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": ErrorCode.INVALID_REQUEST.value,
+                "error_code": ErrorCode.INVALID_REQUEST.value,
+                "error_message": "limit must be positive",
+                "error_detail": {"code": ErrorCode.INVALID_REQUEST.value},
+                "action_hint": "Use a positive limit value.",
+            },
+        )
+    return store.list_recent(limit=limit)
 
 
 @app.get("/experiments/{experiment_id}", response_model=RunExperimentResponse, tags=["experiments"])
@@ -617,23 +685,6 @@ def clear_experiment_events(experiment_id: str, _: None = Depends(require_api_ke
     store_events = get_event_store()
     store_events.clear(experiment_id)
     return None
-
-
-@app.get("/experiments/recent", response_model=list[ExperimentSummary], tags=["experiments"])
-def list_recent_experiments(limit: int = 50, _: None = Depends(require_api_key)) -> list[ExperimentSummary]:
-    """Return the most recent experiment summaries (bounded)."""
-    if limit <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": ErrorCode.INVALID_REQUEST.value,
-                "error_code": ErrorCode.INVALID_REQUEST.value,
-                "error_message": "limit must be positive",
-                "error_detail": {"code": ErrorCode.INVALID_REQUEST.value},
-                "action_hint": "Use a positive limit value.",
-            },
-        )
-    return store.list_recent(limit=limit)
 
 
 @app.get("/telemetry/qubits", response_model=QubitTelemetry, tags=["telemetry"])
