@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import os
 import sys
@@ -27,13 +28,29 @@ def _append_cached_wheel() -> None:
         sys.path.insert(0, wheel_path)
 
 
+def _ensure_event_loop() -> None:
+    """Guarantee an event loop is available for httpx AsyncClient tests."""
+
+    try:
+        asyncio.get_running_loop()
+        return
+    except RuntimeError:
+        pass
+
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+
 def load_httpx() -> ModuleType:
     """Return an httpx-compatible module, using a cached wheel or stub fallback."""
 
+    _append_cached_wheel()
+    _ensure_event_loop()
     try:
         return importlib.import_module("httpx")
     except ModuleNotFoundError:
-        _append_cached_wheel()
         try:
             return importlib.import_module("httpx")
         except ModuleNotFoundError:

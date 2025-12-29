@@ -69,7 +69,14 @@ class SynQcEngine:
         Returns:
             (effective_shot_budget, warn_for_target)
         """
-        shot_budget = req.shot_budget or settings.default_shot_budget
+        requested_shots = req.shot_budget or settings.default_shot_budget
+        usage = self._budget_tracker.get_usage(session_id)
+
+        if requested_shots > settings.max_shots_per_session or requested_shots > max(0, settings.max_shots_per_session - usage):
+            remaining = settings.max_shots_per_session - usage
+            raise BudgetExceeded(remaining=max(remaining, 0))
+
+        shot_budget = requested_shots
         if shot_budget <= 0:
             raise ValueError("shot_budget must be positive")
         if shot_budget > settings.max_shots_per_experiment:
@@ -300,8 +307,10 @@ class SynQcEngine:
 
         return kpi_details
 
-    def run_experiment(self, req: RunExperimentRequest, session_id: str) -> RunExperimentResponse:
+    def run_experiment(self, req: RunExperimentRequest, session_id: str, **kwargs) -> RunExperimentResponse:
         """Run a high-level SynQc experiment according to the request."""
+        run_id_override = kwargs.get("run_id")
+
         effective_shot_budget, warn_for_target = self._apply_shot_guardrails(req, session_id)
 
         start = time.time()
@@ -344,7 +353,7 @@ class SynQcEngine:
 
         kpi_details = self._build_kpi_details(kpis)
 
-        run_id = str(uuid.uuid4())
+        run_id = str(run_id_override) if run_id_override else str(uuid.uuid4())
         run = RunExperimentResponse(
             id=run_id,
             preset=req.preset,
