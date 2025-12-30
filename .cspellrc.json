@@ -1,0 +1,27 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "synqc",
+    "SYNQC",
+    "UVICORN",
+    "uvicorn",
+    "healthcheck",
+    "urllib",
+    "urlopen",
+    "appendonly",
+    "redis",
+    "qiskit",
+    "grover",
+    "shor",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONUNBUFFERED",
+    "setuptools"
+  ],
+  "ignorePaths": [
+    "node_modules",
+    ".git",
+    "dist",
+    "build"
+  ]
+}
