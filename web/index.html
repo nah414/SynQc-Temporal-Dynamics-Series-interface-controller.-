@@ -1309,6 +1309,7 @@
       <button class="primary-btn" id="runPresetBtn" type="button">Run preset</button>
       <div class="panel-sub" id="runStatus" aria-live="polite">Backend: not connected yet.</div>
       <div class="health-badges" id="healthBadges" aria-live="polite"></div>
+      <div id="connStatus" aria-live="polite" style="margin-top: 0.5rem;"></div>
       <div class="run-alert" id="runAlert" role="alert" style="display:none;">
         <span class="icon" aria-hidden="true">!</span>
         <span class="alert-text"></span>
@@ -2316,6 +2317,91 @@
       if (!runAlert) return;
       if (runAlertText) runAlertText.textContent = message;
       runAlert.style.display = 'flex';
+    }
+
+    // --------------------------------------------
+    // Enhanced connectivity check with timeout
+    // --------------------------------------------
+    function withTimeout(ms, promise) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), ms);
+      return {
+        signal: controller.signal,
+        done: promise(controller.signal).finally(() => clearTimeout(timeout)),
+      };
+    }
+
+    async function checkHealth(apiBase) {
+      const base = apiBase.replace(/\/+$/, "");
+      const url = `${base}/health`;
+
+      const { done } = withTimeout(2500, async (signal) => {
+        const res = await fetch(url, { signal, cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+        return res.json();
+      });
+
+      return done; // resolves JSON or throws
+    }
+
+    function renderBackendError({ apiBase, err }) {
+      const el = document.getElementById("connStatus");
+      if (!el) return;
+
+      const tried = apiBase.replace(/\/+$/, "") + "/health";
+      const msg = (err && err.name === "AbortError")
+        ? "Timed out"
+        : (err && err.message) ? err.message : String(err);
+
+      el.innerHTML = ""; // keep it XSS-safe: build nodes, don't inject raw strings
+      const box = document.createElement("div");
+      box.style.padding = "10px";
+      box.style.border = "1px solid #ff5";
+      box.style.borderRadius = "8px";
+      box.style.marginTop = "0.5rem";
+
+      const title = document.createElement("div");
+      title.textContent = "Backend unreachable";
+      title.style.fontWeight = "700";
+
+      const detail = document.createElement("div");
+      detail.textContent = `Tried: ${tried} — ${msg}`;
+
+      const steps = document.createElement("pre");
+      steps.style.fontSize = "0.7rem";
+      steps.style.marginTop = "0.5rem";
+      steps.style.whiteSpace = "pre-wrap";
+      steps.textContent =
+`Quick fixes:
+- Docker demo:
+  docker compose ps
+  curl -sf http://127.0.0.1:8001/health
+- Local backend:
+  uvicorn synqc_backend.api:app --host 127.0.0.1 --port 8001 --reload
+- Local frontend server:
+  cd web && python -m http.server 8080
+- Or point the UI explicitly:
+  ?api=http://127.0.0.1:8001`;
+
+      box.appendChild(title);
+      box.appendChild(detail);
+      box.appendChild(steps);
+      el.appendChild(box);
+    }
+
+    async function initConnectivity(apiBase) {
+      const el = document.getElementById("connStatus");
+      if (el) el.textContent = "Connecting to backend…";
+
+      try {
+        const health = await checkHealth(apiBase);
+        if (el) el.textContent = "Backend connected ✅";
+        return health;
+      } catch (err) {
+        renderBackendError({ apiBase, err });
+        // optionally disable "Run preset" button here
+        return null;
+      }
     }
 
     async function preflightHealthCheck(timeoutMs = HEALTH_PING_TIMEOUT_MS) {
@@ -4458,8 +4544,15 @@
     primeWorkflowFromRun(lastRun);
     startQubitDemo();
     initShorPanel();
-    preflightHealthCheck()
-      .then((health) => refreshFromBackend({ initialHealth: health }))
+    
+    // Initialize connectivity check with better error handling
+    initConnectivity(API_BASE)
+      .then((health) => {
+        if (health) {
+          return refreshFromBackend({ initialHealth: health });
+        }
+        return refreshFromBackend();
+      })
       .catch(() => refreshFromBackend())
       .finally(() => updateInterpretationText());
   </script>
