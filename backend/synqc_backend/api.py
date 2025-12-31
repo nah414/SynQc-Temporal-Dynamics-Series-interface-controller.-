@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 import atexit
 
+from .chat_router import router as chat_router
 from .budget import BudgetTracker
 from .config import settings
 from .control_profiles import ControlProfileStore, ControlProfileUpdate, ControlProfile
@@ -106,6 +107,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include chat router
+app.include_router(chat_router, prefix="/api", tags=["chat"])
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
