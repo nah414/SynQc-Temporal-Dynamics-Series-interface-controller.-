@@ -1,0 +1,9 @@
+irm : {"detail":{"code":"api_key_not_configured","message":"API key 
+enforcement is enabled but no API key is configured on the server."}}
+At line:1 char:1
++ irm http://127.0.0.1:8001/experiments/recent | ConvertTo-Json -Depth  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:Htt 
+   pWebRequest) [Invoke-RestMethod], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShe 
+   ll.Commands.InvokeRestMethodCommand

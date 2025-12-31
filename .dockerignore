@@ -1,0 +1,66 @@
+# Git and version control
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Development and testing
+tests/
+backend/tests/
+backend/scripts/
+backend/_ops/
+backend/ops/
+scripts/
+_ops/
+ops/
+*.ipynb
+
+# Build artifacts
+node_modules/
+package-lock.json
+yarn.lock
+
+# Archives and temp files
+archives/
+*.zip
+*.tar.gz
+*.log
