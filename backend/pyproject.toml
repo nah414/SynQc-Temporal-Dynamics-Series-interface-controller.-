@@ -29,8 +29,8 @@ qiskit = ["qiskit>=1.2.0", "qiskit-aer>=0.15.0", "qiskit-ibm-runtime>=0.24.0"]
 braket = ["amazon-braket-sdk>=1.75.0", "amazon-braket-default-simulator>=1.22.0"]
 ionq = ["qiskit-ionq>=0.4.7"]
 
-[tool.setuptools.packages.find]
-include = ["synqc_backend", "synqc_backend.*"]
+[tool.setuptools]
+packages = ["synqc_backend"]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel>=0.41.0"]

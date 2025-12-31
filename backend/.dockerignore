@@ -13,3 +13,5 @@ venv/
 # tests and scripts are not needed for runtime image
 scripts/
 tests/
+_ops/
+ops/

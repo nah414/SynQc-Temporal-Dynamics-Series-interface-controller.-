@@ -1,0 +1,5 @@
+prune ops
+prune scripts
+prune tests
+exclude ops/*
+exclude scripts/*
