@@ -617,7 +617,12 @@
         } catch (_) { /* ignore */ }
 
       } catch (err) {
-        setRunStatus(`Backend: not reachable (${API_BASE}). Start it and refresh.`);
+        const errorMsg = err.message?.includes('502') 
+          ? 'Backend gateway error (502). The API server may be starting up or not responding.'
+          : err.message?.includes('404')
+          ? 'Backend endpoint not found (404). Check API configuration.'
+          : 'Backend not reachable';
+        setRunStatus(`${errorMsg} (${API_BASE}). Start docker-compose and refresh.`);
       }
     }
 

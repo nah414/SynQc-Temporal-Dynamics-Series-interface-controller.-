@@ -78,6 +78,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  shor:
+    build:
+      context: ./archives/addons/synqc_shor_addon_v2
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      SYNQC_SHOR_ENABLE: "true"
+      SYNQC_SHOR_ALLOW_TEXT: "true"
+      SYNQC_SHOR_MAX_N_BITS: "16"
+      SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   synqc_data:
   synqc_redis_data:

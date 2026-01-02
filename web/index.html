@@ -68,13 +68,37 @@
     @keyframes floatParticle {
       0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.2; }
       20% { opacity: 0.7; }
-      50% { transform: translate3d(40px, -60px, 0) scale(1.15); }
+      50% { transform: translate3d(clamp(-50vw, 40px, 50vw), clamp(-50vh, -60px, 50vh), 0) scale(1.15); }
       80% { opacity: 0.4; }
-      100%{ transform: translate3d(-20px,-120px,0) scale(0.9); opacity: 0; }
+      100%{ transform: translate3d(clamp(-50vw, -20px, 50vw), clamp(-50vh, -120px, 50vh), 0) scale(0.9); opacity: 0; }
     }
     @keyframes pulseDot {
       0%, 100% { opacity: 0.45; }
       50% { opacity: 1; }
+    }
+    .light-particle {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: popParticle 4s ease-in-out infinite;
+    }
+    @keyframes popParticle {
+      0% { 
+        transform: scale(0) translate(-50%, -50%); 
+        opacity: 0; 
+      }
+      10% { 
+        transform: scale(1) translate(-50%, -50%); 
+        opacity: 0.8; 
+      }
+      90% { 
+        transform: scale(1.5) translate(-50%, -50%); 
+        opacity: 0.6; 
+      }
+      100% { 
+        transform: scale(0) translate(-50%, -50%); 
+        opacity: 0; 
+      }
     }
     header {
       position: sticky;
@@ -1190,7 +1214,7 @@
 <body>
     <div class="app">
       <div class="particle-layer spectralized" id="particleLayer"></div>
-      <div class="background-layer" aria-hidden="true"></div>
+      <div class="background-layer" aria-hidden="true" id="backgroundLayer"></div>
 
     <header>
       <div class="brand">
@@ -1854,8 +1878,9 @@
       for (let i = 0; i < count; i++) {
         const p = document.createElement('div');
         p.className = 'particle';
-        const x = Math.random() * 100;
-        const y = 20 + Math.random() * 80;
+        // Keep particles within safe bounds (10-90% to avoid edge overflow)
+        const x = 10 + Math.random() * 80;
+        const y = 20 + Math.random() * 70;
         const delay = Math.random() * 18;
         const scale = 0.8 + Math.random() * 0.7;
         p.style.left = x + 'vw';
@@ -1867,14 +1892,91 @@
     })();
 
     // --------------------------------------------
-    // Mode pills
+    // Popping light particles in background
     // --------------------------------------------
+    (function initLightParticles() {
+      const bgLayer = document.getElementById('backgroundLayer');
+      if (!bgLayer) return;
+      
+      function createLightParticle() {
+        const particle = document.createElement('div');
+        particle.className = 'light-particle';
+        
+        const x = Math.random() * 100;
+        const y = Math.random() * 100;
+        const size = 3 + Math.random() * 8;
+        const duration = 3 + Math.random() * 3;
+        const delay = Math.random() * 4;
+        
+        const colors = [
+          'rgba(106, 229, 255, 0.6)',
+          'rgba(255, 221, 110, 0.6)',
+          'rgba(32, 227, 178, 0.6)',
+          'rgba(255, 255, 255, 0.5)'
+        ];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        
+        particle.style.left = x + '%';
+        particle.style.top = y + '%';
+        particle.style.width = size + 'px';
+        particle.style.height = size + 'px';
+        particle.style.background = `radial-gradient(circle, ${color}, transparent 70%)`;
+        particle.style.boxShadow = `0 0 ${size * 2}px ${color}`;
+        particle.style.animationDuration = duration + 's';
+        particle.style.animationDelay = delay + 's';
+        
+        bgLayer.appendChild(particle);
+        
+        setTimeout(() => {
+          if (particle.parentNode) {
+            bgLayer.removeChild(particle);
+          }
+          createLightParticle();
+        }, (duration + delay) * 1000);
+      }
+      
+      // Create initial batch of 20 particles
+      for (let i = 0; i < 20; i++) {
+        createLightParticle();
+      }
+    })();
+
+    // --------------------------------------------
+    // Mode pills with functionality
+    // --------------------------------------------
+    let currentMode = 'explore';
+    
+    function setMode(mode) {
+      currentMode = mode;
+      const root = document.documentElement;
+      
+      // Update visual theme based on mode
+      if (mode === 'explore') {
+        root.style.setProperty('--spectral-shift', '0deg');
+        document.body.style.opacity = '1';
+      } else if (mode === 'calibrate') {
+        root.style.setProperty('--spectral-shift', '45deg');
+        document.body.style.opacity = '1';
+      } else if (mode === 'prod') {
+        root.style.setProperty('--spectral-shift', '-30deg');
+        document.body.style.opacity = '0.95';
+      }
+      
+      // Log mode change for debugging
+      console.log(`Mode changed to: ${mode}`);
+    }
+    
     document.querySelectorAll('.mode-pill').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.mode-pill').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        const mode = btn.getAttribute('data-mode');
+        if (mode) setMode(mode);
       });
     });
+    
+    // Initialize with default mode
+    setMode('explore');
 
     // --------------------------------------------
     // Primary nav -> view switching (v0.4)
@@ -4205,8 +4307,16 @@
         renderFailureNotes();
 
       } catch (err) {
-        setRunStatus(`Backend: not reachable (${API_BASE}). Start it and refresh.`);
+        const errorMsg = err.message?.includes('502') 
+          ? 'Backend gateway error (502). The API server may be starting up or not responding.'
+          : err.message?.includes('404')
+          ? 'Backend endpoint not found (404). Check API configuration.'
+          : 'Backend not reachable';
+        setRunStatus(`${errorMsg} (${API_BASE}). Start docker-compose and refresh.`);
         renderHealthSummary(null);
+        if (hardwareCapabilityHint) {
+          hardwareCapabilityHint.textContent = 'Backend unavailable - cannot load capabilities';
+        }
       }
       await refreshQubitPanel();
     }
