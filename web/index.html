@@ -1938,10 +1938,10 @@
         const delay = Math.random() * 4;
         
         const colors = [
-          'rgba(106, 229, 255, 0.6)',
-          'rgba(255, 221, 110, 0.6)',
-          'rgba(32, 227, 178, 0.6)',
-          'rgba(255, 255, 255, 0.5)'
+          'rgba(106, 229, 255, 0.9)',
+          'rgba(255, 221, 110, 0.85)',
+          'rgba(32, 227, 178, 0.9)',
+          'rgba(255, 255, 255, 0.8)'
         ];
         const color = colors[Math.floor(Math.random() * colors.length)];
         
@@ -1950,7 +1950,7 @@
         particle.style.width = size + 'px';
         particle.style.height = size + 'px';
         particle.style.background = `radial-gradient(circle, ${color}, transparent 70%)`;
-        particle.style.boxShadow = `0 0 ${size * 2}px ${color}`;
+        particle.style.boxShadow = `0 0 ${size * 3}px ${color}, 0 0 ${size * 5}px ${color.replace(/[\d.]+\)/, '0.4)')}`;
         particle.style.animationDuration = duration + 's';
         particle.style.animationDelay = delay + 's';
         
