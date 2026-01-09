@@ -5038,6 +5038,7 @@ console.info("Shor live channel disabled in local mode.");
 
       async function fetchAgentReply(text) {
         const payload = {
+          agent: selectedAgent,
           prompt: text,
           history: agentChatHistory.slice(-6),
           preset: presetSelect?.value || null,

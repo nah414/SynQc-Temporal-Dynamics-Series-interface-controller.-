@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SynQc TDS — MVP Tools</title>
+
+  <!-- Preserve existing front-end visual language -->
+  <link rel="stylesheet" href="../assets/background.css" />
+
+  <style>
+    /* Minimal, additive styling that uses existing CSS variables if present.
+       We do NOT change the main console UI; this page stands alone. */
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg-main, #030308);
+      color: var(--text-main, #f6f7ff);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px 16px 60px;
+    }
+    .top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .title {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0.3px;
+    }
+    .subtitle {
+      color: var(--text-soft, #a6acd3);
+      font-size: 13px;
+    }
+    .panel {
+      background: var(--bg-panel, #0a0c16);
+      border: 1px solid var(--border-subtle, #262b44);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .label {
+      display: block;
+      margin-top: 12px;
+      margin-bottom: 6px;
+      color: var(--text-soft, #a6acd3);
+      font-size: 12px;
+    }
+    textarea.input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle, #262b44);
+      background: var(--bg-panel-soft, #0f1220);
+      color: var(--text-main, #f6f7ff);
+      resize: vertical;
+      outline: none;
+    }
+    .btn {
+      border: 1px solid var(--border-subtle, #262b44);
+      background: var(--bg-panel-soft, #0f1220);
+      color: var(--text-main, #f6f7ff);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    .btn-accent {
+      border-color: rgba(106,229,255,0.6);
+      box-shadow: 0 0 0 1px rgba(106,229,255,0.18) inset;
+    }
+    .status {
+      white-space: pre-wrap;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle, #262b44);
+      background: rgba(15,18,32,0.6);
+      font-size: 12px;
+      color: var(--text-soft, #a6acd3);
+    }
+    .status[data-ok="1"] {
+      color: var(--text-main, #f6f7ff);
+    }
+    .subtle {
+      margin-top: 10px;
+      color: var(--text-soft, #a6acd3);
+      font-size: 12px;
+    }
+    pre.pre {
+      margin: 0;
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle, #262b44);
+      background: rgba(15,18,32,0.6);
+      min-height: 180px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      color: var(--text-main, #f6f7ff);
+    }
+    a.link {
+      color: var(--accent, #6ae5ff);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    a.link:hover { text-decoration: underline; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1 class="title">SynQc TDS — MVP Tools</h1>
+        <div class="subtitle">Additive page. Does not replace or modify the main console UI.</div>
+      </div>
+      <div class="row" style="margin-top:0">
+        <a class="link" id="mvp_link_console" target="_blank" rel="noopener">Open Main Console</a>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2 style="margin:0 0 10px; font-size:16px;">Grover Sandbox Console</h2>
+
+      <div id="mvp_status" class="status">Booting…</div>
+
+      <label class="label" for="mvp_prompt">Prompt</label>
+      <textarea id="mvp_prompt" class="input" rows="3"
+        placeholder="Dry-run prompt (safe)"></textarea>
+
+      <div class="row">
+        <button id="mvp_btn_health" class="btn">Health</button>
+        <button id="mvp_btn_run" class="btn btn-accent">Run Grover (dry-run)</button>
+      </div>
+
+      <div class="subtle">Job ID: <span id="mvp_job">(none)</span></div>
+
+      <label class="label">Result</label>
+      <pre id="mvp_result" class="pre"></pre>
+
+      <div class="row">
+        <a class="link" id="mvp_link_grafana" target="_blank" rel="noopener">Grafana</a>
+        <a class="link" id="mvp_link_prom" target="_blank" rel="noopener">Prometheus</a>
+        <a class="link" id="mvp_link_metrics" target="_blank" rel="noopener">/metrics</a>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="./mvp-console.js"></script>
+</body>
+</html>
